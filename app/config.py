@@ -1,0 +1,18 @@
+import os
+
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+GOOGLE_PLACES_API_KEY = os.environ["GOOGLE_PLACES_API_KEY"]
+APP_SHARED_SECRET = os.environ["APP_SHARED_SECRET"]
+
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+
+# Suggestions depend on the user's liked/blacklisted history, but the very first
+# load for a given prompt+constraints (no history yet) repeats a lot across users
+# hitting the same popular destinations, so it's worth caching briefly.
+SUGGESTIONS_CACHE_TTL_SECONDS = int(os.environ.get("SUGGESTIONS_CACHE_TTL_SECONDS", 60 * 30))
+
+# Photo lookups for a given place rarely change, so cache them much longer.
+PHOTO_REFERENCE_CACHE_TTL_SECONDS = int(os.environ.get("PHOTO_REFERENCE_CACHE_TTL_SECONDS", 60 * 60 * 24 * 7))
+PHOTO_IMAGE_CACHE_TTL_SECONDS = int(os.environ.get("PHOTO_IMAGE_CACHE_TTL_SECONDS", 60 * 60 * 24 * 7))
+
+RATE_LIMIT = os.environ.get("RATE_LIMIT", "30/minute")
