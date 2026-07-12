@@ -1,6 +1,10 @@
+import logging
+
 from fastapi import Header, HTTPException
 
 from . import attestation, config
+
+logger = logging.getLogger("lesschoice.attest")
 
 
 async def require_app_secret(x_app_secret: str = Header(default="")) -> None:
@@ -22,4 +26,5 @@ async def require_attested_device(
     try:
         await attestation.verify_assertion(x_key_id, x_assertion, x_challenge)
     except attestation.AttestationError as exc:
+        logger.warning("assertion rejected for keyId=%s: %s", x_key_id, exc)
         raise HTTPException(status_code=401, detail=str(exc)) from exc

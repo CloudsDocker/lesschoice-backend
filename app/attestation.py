@@ -66,12 +66,15 @@ async def register_device(key_id_b64: str, attestation_b64: str, challenge: str)
     try:
         key_id_bytes = base64.b64decode(key_id_b64)
         attestation_bytes = base64.b64decode(attestation_b64)
-        challenge_bytes = base64.urlsafe_b64decode(challenge + "=" * (-len(challenge) % 4))
     except Exception as exc:
         raise AttestationError("malformed base64 input") from exc
 
+    # The client hashes SHA256(UTF-8 bytes of the challenge string) to build
+    # clientDataHash, and pyattest's nonce verifier internally does
+    # SHA256(nonce_param) to reconstruct that same hash — so nonce_param here
+    # must be the challenge string's raw UTF-8 bytes, not its base64 decoding.
     apple_config = AppleConfig(key_id=key_id_bytes, app_id=_app_id(), production=False)
-    attestation = Attestation(raw=attestation_bytes, nonce=challenge_bytes, config=apple_config)
+    attestation = Attestation(raw=attestation_bytes, nonce=challenge.encode(), config=apple_config)
 
     try:
         await attestation.verify()
@@ -80,7 +83,7 @@ async def register_device(key_id_b64: str, attestation_b64: str, challenge: str)
         # input (garbage CBOR, truncated certs, etc.) can also surface as raw
         # errors from cbor2/cryptography/asn1crypto — treat all of it the same
         # way: a clean, non-leaky rejection rather than a 500 with a stack trace.
-        raise AttestationError(f"attestation verification failed: {exc}") from exc
+        raise AttestationError(f"attestation verification failed: {type(exc).__name__}: {exc}") from exc
 
     try:
         public_key = _leaf_public_key_from_attestation(attestation_bytes)
@@ -109,7 +112,6 @@ async def verify_assertion(key_id_b64: str, assertion_b64: str, challenge: str) 
 
     try:
         assertion_bytes = base64.b64decode(assertion_b64)
-        challenge_bytes = base64.urlsafe_b64decode(challenge + "=" * (-len(challenge) % 4))
     except Exception as exc:
         raise AttestationError("malformed base64 input") from exc
 
@@ -118,13 +120,13 @@ async def verify_assertion(key_id_b64: str, assertion_b64: str, challenge: str) 
         raise AttestationError("stored public key is not an EC key")
 
     apple_config = AppleConfig(key_id=base64.b64decode(key_id_b64), app_id=_app_id(), production=False)
-    expected_hash = hashlib.sha256(challenge_bytes).digest()
+    expected_hash = hashlib.sha256(challenge.encode()).digest()
     assertion = Assertion(raw=assertion_bytes, expected_hash=expected_hash, public_key=public_key, config=apple_config)
 
     try:
         assertion.verify()
     except Exception as exc:
-        raise AttestationError(f"assertion verification failed: {exc}") from exc
+        raise AttestationError(f"assertion verification failed: {type(exc).__name__}: {exc}") from exc
 
     unpacked = AppleAssertionVerifier.unpack(assertion_bytes)
     new_counter = unpacked["counter"]
