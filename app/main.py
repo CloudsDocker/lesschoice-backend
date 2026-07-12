@@ -31,8 +31,8 @@ class SuggestionsRequest(BaseModel):
     count: int = 5
 
 
-@app.get("/healthz")
-async def healthz():
+@app.get("/status")
+async def status():
     return {"status": "ok"}
 
 

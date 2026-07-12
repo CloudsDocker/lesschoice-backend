@@ -33,14 +33,20 @@ export $(cat .env | xargs)
 uvicorn app.main:app --reload
 ```
 
-## Deploying to Google Cloud Run
+## Live service
+
+Deployed at `https://lesschoice-backend-798630052741.australia-southeast1.run.app`
+in the `todzhangphray` GCP project, region `australia-southeast1` (Sydney).
+
+## Deploying to Google Cloud Run (manual)
 
 ```bash
 gcloud run deploy lesschoice-backend \
+  --project todzhangphray \
   --source . \
-  --region us-central1 \
+  --region australia-southeast1 \
   --allow-unauthenticated \
-  --set-env-vars GEMINI_API_KEY=...,GOOGLE_PLACES_API_KEY=...,APP_SHARED_SECRET=...
+  --set-secrets="GEMINI_API_KEY=gemini-api-key:latest,GOOGLE_PLACES_API_KEY=google-places-api-key:latest,APP_SHARED_SECRET=app-shared-secret:latest"
 ```
 
 `--allow-unauthenticated` is required since the iOS app calls this over plain
@@ -48,6 +54,27 @@ HTTPS with the app-level shared secret, not Google IAM auth. The shared
 secret plus per-IP rate limiting (`RATE_LIMIT` env var, default `30/minute`)
 is what stands between this endpoint and abuse — see the cost-control
 discussion in the iOS repo's `APP_STORE_PUBLISHING.md` for context.
+
+The actual API keys and app secret live in Google Secret Manager
+(`gemini-api-key`, `google-places-api-key`, `app-shared-secret` in project
+`todzhangphray`), not as plain Cloud Run env vars — this keeps them out of
+revision metadata, `gcloud run services describe` output, and any CI logs.
+
+## Automated deploys (GitHub Actions)
+
+`.github/workflows/deploy.yml` deploys to Cloud Run on every push to `main`.
+It authenticates to Google Cloud via Workload Identity Federation (no
+long-lived JSON key stored in GitHub) — the trust is scoped to this exact
+repo (`CloudsDocker/lesschoice-backend`) via a workload identity pool
+provider already configured in the `todzhangphray` project
+(`github-pool` / `github-provider`), bound to the
+`github-actions-deployer@todzhangphray.iam.gserviceaccount.com` service
+account. No GitHub Secrets are needed for the deploy — the API keys are
+pulled straight from Secret Manager at deploy time via `--set-secrets`.
+
+If this repo is ever renamed or moved to a different org, the workload
+identity pool provider's `--attribute-condition` needs updating to match, or
+the Action will fail to authenticate.
 
 After deploying, also set on the Google Cloud side:
 - Restrict the Places API key to this Cloud Run service's IP range if
