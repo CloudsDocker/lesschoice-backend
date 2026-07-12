@@ -20,3 +20,9 @@ RATE_LIMIT = os.environ.get("RATE_LIMIT", "30/minute")
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "todzhangphray")
 FIRESTORE_DATABASE = os.environ.get("FIRESTORE_DATABASE", "lesschoice-cache")
 PHOTO_BUCKET_NAME = os.environ.get("PHOTO_BUCKET_NAME", "lesschoice-photo-cache")
+
+APPLE_TEAM_ID = os.environ.get("APPLE_TEAM_ID", "ZLQUC8CBXW")
+APPLE_BUNDLE_ID = os.environ.get("APPLE_BUNDLE_ID", "com.hdeazy.selectless")
+# Rollout switch: keep False until a client build that actually sends attestation
+# headers is confirmed live, otherwise every existing installed build starts 401ing.
+REQUIRE_APP_ATTEST = os.environ.get("REQUIRE_APP_ATTEST", "false").lower() == "true"

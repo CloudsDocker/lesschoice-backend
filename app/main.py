@@ -7,8 +7,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from . import config
-from .auth import require_app_secret
+from . import attestation, config
+from .auth import require_app_secret, require_attested_device
 from .cache import FirestoreCache
 from .gemini_service import GeminiError, fetch_places
 from .places_service import fetch_photo_bytes, find_photo_reference
@@ -31,12 +31,34 @@ class SuggestionsRequest(BaseModel):
     count: int = 5
 
 
+class AttestRegisterRequest(BaseModel):
+    keyId: str
+    attestation: str
+    challenge: str
+
+
 @app.get("/status")
 async def status():
     return {"status": "ok"}
 
 
-@app.post("/v1/suggestions", dependencies=[Depends(require_app_secret)])
+@app.post("/v1/attest/challenge", dependencies=[Depends(require_app_secret)])
+@limiter.limit(config.RATE_LIMIT)
+async def attest_challenge(request: Request):
+    return {"challenge": await attestation.issue_challenge()}
+
+
+@app.post("/v1/attest/register", dependencies=[Depends(require_app_secret)])
+@limiter.limit(config.RATE_LIMIT)
+async def attest_register(request: Request, body: AttestRegisterRequest):
+    try:
+        await attestation.register_device(body.keyId, body.attestation, body.challenge)
+    except attestation.AttestationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"status": "registered"}
+
+
+@app.post("/v1/suggestions", dependencies=[Depends(require_app_secret), Depends(require_attested_device)])
 @limiter.limit(config.RATE_LIMIT)
 async def suggestions(request: Request, body: SuggestionsRequest):
     # Only cache the "cold start" case: no personalization signal yet, so many
@@ -67,7 +89,7 @@ async def suggestions(request: Request, body: SuggestionsRequest):
     return places
 
 
-@app.get("/v1/place-photo", dependencies=[Depends(require_app_secret)])
+@app.get("/v1/place-photo", dependencies=[Depends(require_app_secret), Depends(require_attested_device)])
 @limiter.limit(config.RATE_LIMIT)
 async def place_photo(request: Request, title: str = Query(...), context: str = Query(...)):
     reference = await find_photo_reference(title, context)
