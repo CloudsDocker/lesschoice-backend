@@ -84,11 +84,24 @@ After deploying, also set on the Google Cloud side:
   the Gemini key, same as before — the backend reduces call volume via
   caching but doesn't eliminate the need for a hard ceiling.
 
-## Cache limitations
+## Caching
 
-The cache is in-process (a plain dict with TTLs), not Redis/Firestore. Cloud
-Run can run multiple instances and recycles them on scale-to-zero, so this is
-best-effort: it cuts a lot of repeat calls within an instance's lifetime but
-isn't a global cache. If usage grows enough that this matters, swap `TTLCache`
-in `app/cache.py` for a Redis-backed one (e.g. via Memorystore) without
-changing any calling code.
+Both caches are persistent and shared across Cloud Run instances/restarts —
+no more losing the cache on every cold start:
+
+- **Suggestions + photo references** — Firestore, database `lesschoice-cache`
+  (Native mode, `australia-southeast1`), collections `suggestions_cache` and
+  `photo_references`. Each doc has an `expires_at` Timestamp field with a
+  native Firestore TTL policy enabled on it, so expired docs are purged
+  automatically (can lag up to ~24h; `FirestoreCache.get` also checks
+  expiry itself so stale-but-not-yet-purged docs are never served).
+- **Photo image bytes** — Cloud Storage bucket `lesschoice-photo-cache`
+  (`australia-southeast1`), objects at `photos/<reference>_<maxwidth>.jpg`.
+  A bucket lifecycle rule deletes objects after 7 days
+  (`gsutil lifecycle get gs://lesschoice-photo-cache` to inspect/change it).
+
+The Cloud Run runtime service account
+(`798630052741-compute@developer.gserviceaccount.com`) has `roles/datastore.user`
+on the project and `roles/storage.objectAdmin` on the bucket — both already
+granted. Local dev needs `gcloud auth application-default login` for these
+clients to authenticate.

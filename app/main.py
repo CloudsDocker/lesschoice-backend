@@ -9,7 +9,7 @@ from slowapi.util import get_remote_address
 
 from . import config
 from .auth import require_app_secret
-from .cache import TTLCache
+from .cache import FirestoreCache
 from .gemini_service import GeminiError, fetch_places
 from .places_service import fetch_photo_bytes, find_photo_reference
 
@@ -19,7 +19,7 @@ app = FastAPI(title="lesschoice-backend")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-_suggestions_cache = TTLCache()
+_suggestions_cache = FirestoreCache("suggestions_cache")
 
 
 class SuggestionsRequest(BaseModel):
@@ -45,7 +45,7 @@ async def suggestions(request: Request, body: SuggestionsRequest):
     if not body.likedTitles and not body.blacklistedTitles and not body.alreadySuggestedTitles:
         raw_key = f"{body.prompt.strip().lower()}|{body.constraints.strip().lower()}|{body.count}"
         cache_key = hashlib.sha256(raw_key.encode()).hexdigest()
-        cached = _suggestions_cache.get(cache_key)
+        cached = await _suggestions_cache.get(cache_key)
         if cached is not None:
             return json.loads(cached)
 
@@ -62,7 +62,7 @@ async def suggestions(request: Request, body: SuggestionsRequest):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     if cache_key is not None:
-        _suggestions_cache.set(cache_key, json.dumps(places), config.SUGGESTIONS_CACHE_TTL_SECONDS)
+        await _suggestions_cache.set(cache_key, json.dumps(places), config.SUGGESTIONS_CACHE_TTL_SECONDS)
 
     return places
 
