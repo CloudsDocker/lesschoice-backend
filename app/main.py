@@ -45,19 +45,6 @@ async def status():
     return {"status": "ok"}
 
 
-class DebugLogRequest(BaseModel):
-    message: str
-
-
-@app.post("/v1/debug-log", dependencies=[Depends(require_app_secret)])
-@limiter.limit(config.RATE_LIMIT)
-async def debug_log(request: Request, body: DebugLogRequest):
-    # Temporary: client-side App Attest errors are otherwise invisible without
-    # Xcode console access to the physical device. Remove once rollout is stable.
-    logger.warning("client debug-log: %s", body.message)
-    return {"status": "logged"}
-
-
 @app.post("/v1/attest/challenge", dependencies=[Depends(require_app_secret)])
 @limiter.limit(config.RATE_LIMIT)
 async def attest_challenge(request: Request):
