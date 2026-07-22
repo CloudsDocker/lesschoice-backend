@@ -28,6 +28,15 @@ def _app_id() -> str:
     return f"{config.APPLE_TEAM_ID}.{config.APPLE_BUNDLE_ID}"
 
 
+def _device_doc_id(key_id_b64: str) -> str:
+    # App Attest key IDs are standard base64, which can contain "/". Firestore
+    # treats "/" in a document ID as a collection/document path separator, so a
+    # raw key ID with a slash blows up with "must have an even number of path
+    # elements". Standard base64 never emits "_", so swapping "/"->"_" is a
+    # collision-free, reversible transform safe to use as the document ID.
+    return key_id_b64.replace("/", "_")
+
+
 async def issue_challenge() -> str:
     challenge = secrets.token_urlsafe(32)
     await firestore_client().collection(_challenges_collection).document(challenge).set({
@@ -94,7 +103,7 @@ async def register_device(key_id_b64: str, attestation_b64: str, challenge: str)
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     ).decode()
 
-    await firestore_client().collection(_devices_collection).document(key_id_b64).set({
+    await firestore_client().collection(_devices_collection).document(_device_doc_id(key_id_b64)).set({
         "public_key_pem": public_key_pem,
         "counter": 0,
         "created_at": datetime.now(timezone.utc),
@@ -104,7 +113,7 @@ async def register_device(key_id_b64: str, attestation_b64: str, challenge: str)
 async def verify_assertion(key_id_b64: str, assertion_b64: str, challenge: str) -> None:
     await _consume_challenge(challenge)
 
-    device_ref = firestore_client().collection(_devices_collection).document(key_id_b64)
+    device_ref = firestore_client().collection(_devices_collection).document(_device_doc_id(key_id_b64))
     device_doc = await device_ref.get()
     if not device_doc.exists:
         raise AttestationError("device not registered; call /v1/attest/register first")
