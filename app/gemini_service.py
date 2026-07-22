@@ -49,7 +49,6 @@ async def fetch_places(prompt: str, constraints: str, liked_titles: list[str],
         "contents": [{"parts": [{"text": instructions}]}],
         "generationConfig": {
             "response_mime_type": "application/json",
-            "thinkingConfig": {"thinkingBudget": 0},
         },
     }
 
